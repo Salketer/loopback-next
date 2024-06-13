@@ -15,29 +15,32 @@ import {JSONObject} from './json-types';
 import {ContextTags} from './keys';
 import {Provider} from './provider';
 import {
-  asResolutionOptions,
   ResolutionContext,
   ResolutionError,
   ResolutionOptions,
   ResolutionOptionsOrSession,
   ResolutionSession,
+  asResolutionOptions,
 } from './resolution-session';
 import {instantiateClass} from './resolver';
 import {
   BoundValue,
   Constructor,
-  isPromiseLike,
   MapObject,
-  transformValueOrPromise,
   ValueOrPromise,
+  isPromiseLike,
+  transformValueOrPromise,
 } from './value-promise';
 
 const debug = debugFactory('loopback:context:binding');
 
+interface BindingScopeOptions {
+  optional?: boolean;
+}
 /**
  * Scope for binding values
  */
-export enum BindingScope {
+export class BindingScope {
   /**
    * The binding provides a value that is calculated each time. This will be
    * the default scope if not set.
@@ -56,8 +59,7 @@ export enum BindingScope {
    * - req2.get('b1') ==> 3
    * - app.get('b1') ==> 4
    */
-  TRANSIENT = 'Transient',
-
+  public static TRANSIENT = BindingScope.create('TRANSIENT');
   /**
    * @deprecated Finer-grained scopes such as `APPLICATION`, `SERVER`, or
    * `REQUEST` should be used instead to ensure the scope of sharing of resolved
@@ -86,8 +88,7 @@ export enum BindingScope {
    * - req2.get('b1') ==> 2 (always)
    *
    */
-  CONTEXT = 'Context',
-
+  public static CONTEXT = BindingScope.TRANSIENT;
   /**
    * The binding provides a value as a singleton within the context hierarchy
    * (the owning context and its descendants). The value is calculated only
@@ -109,8 +110,7 @@ export enum BindingScope {
    * 3. `'b1'` is resolved in `app`, reuse it for `req2`
    * - req2.get('b1') ==> 0 (always)
    */
-  SINGLETON = 'Singleton',
-
+  public static SINGLETON = BindingScope.create('SINGLETON');
   /*
    * The following scopes are checked against the context hierarchy to find
    * the first matching context for a given scope in the chain. Resolved binding
@@ -128,8 +128,7 @@ export enum BindingScope {
    * `BindingScope.APPLICATION`).
    *
    */
-  APPLICATION = 'Application',
-
+  public static APPLICATION = BindingScope.create('APPLICATION');
   /**
    * Server scope
    *
@@ -151,8 +150,7 @@ export enum BindingScope {
    * The same binding can resolved/shared/cached for all servers, each of which
    * has its own value for the binding.
    */
-  SERVER = 'Server',
-
+  public static SERVER = BindingScope.create('SERVER');
   /**
    * Request scope
    *
@@ -165,7 +163,19 @@ export enum BindingScope {
    * The `REQUEST` scope is very useful for controllers, services and artifacts
    * that want to have a single instance/value for a given request.
    */
-  REQUEST = 'Request',
+  public static REQUEST = BindingScope.create('REQUEST', {optional: true});
+
+  static create(name: string, opts?: BindingScopeOptions) {
+    return new BindingScope(name, opts);
+  }
+
+  public readonly optional: boolean;
+  private constructor(
+    public readonly name: string,
+    opts?: BindingScopeOptions,
+  ) {
+    this.optional = opts?.optional ?? false;
+  }
 }
 
 /**
@@ -978,7 +988,7 @@ export class Binding<T = BoundValue> extends EventEmitter {
   toJSON(): JSONObject {
     const json: JSONObject = {
       key: this.key,
-      scope: this.scope,
+      scope: this.scope.name,
       tags: this.tagMap,
       isLocked: this.isLocked,
     };

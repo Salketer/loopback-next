@@ -4,7 +4,7 @@
 // License text available at https://opensource.org/licenses/MIT
 
 import {BindingScope, ContextTags, JSONArray, JSONObject} from '@loopback/core';
-import {attribute, Digraph, ICluster, IEdge, INode, toDot} from 'ts-graphviz';
+import {Digraph, ICluster, IEdge, INode, attribute, toDot} from 'ts-graphviz';
 
 /**
  * A wrapper class for context, binding, and its level in the chain
@@ -160,7 +160,7 @@ export class ContextGraph {
     {binding, id}: ContextBinding,
   ): INode {
     let style = `filled,rounded`;
-    if (binding.scope === BindingScope.SINGLETON) {
+    if (binding.scope === BindingScope.SINGLETON.name) {
       style = style + ',bold';
     }
     const tags = binding.tags as JSONObject;
@@ -242,7 +242,7 @@ export class ContextGraph {
       const injections = [];
       // For singletons, search this level and up
       const startingLevel =
-        binding.scope === BindingScope.SINGLETON
+        binding.scope === BindingScope.SINGLETON.name
           ? level
           : this.contextChain.length - 1;
       if (binding.injections) {

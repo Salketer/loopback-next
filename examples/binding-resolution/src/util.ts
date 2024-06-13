@@ -83,7 +83,9 @@ export function bindingScope(
   name: string,
   defaultScope = BindingScope.SINGLETON,
 ) {
-  const scopeName = (process.env.BINDING_SCOPE ?? defaultScope).toLowerCase();
+  const scopeName = (
+    process.env.BINDING_SCOPE ?? defaultScope.name
+  ).toLowerCase();
   const scopes = [
     BindingScope.APPLICATION,
     BindingScope.SERVER,
@@ -93,7 +95,8 @@ export function bindingScope(
     BindingScope.CONTEXT,
   ];
   const scope =
-    scopes.find(s => s.toLowerCase() === scopeName) ?? BindingScope.TRANSIENT;
+    scopes.find(s => s.name.toLowerCase() === scopeName) ??
+    BindingScope.TRANSIENT;
   debug('Binding scope for "%s" is set to "%s".', name, scope);
   return scope;
 }

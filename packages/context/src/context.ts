@@ -31,20 +31,20 @@ import {ContextView} from './context-view';
 import {JSONObject} from './json-types';
 import {ContextBindings} from './keys';
 import {
-  asResolutionOptions,
   ResolutionError,
   ResolutionOptions,
   ResolutionOptionsOrSession,
   ResolutionSession,
+  asResolutionOptions,
 } from './resolution-session';
 import {generateUniqueId} from './unique-id';
 import {
   BoundValue,
   Constructor,
+  ValueOrPromise,
   getDeepProperty,
   isPromiseLike,
   transformValueOrPromise,
-  ValueOrPromise,
 } from './value-promise';
 
 /**
@@ -123,7 +123,10 @@ export class Context extends EventEmitter {
    * @param name - Name of the context. If not provided, a unique identifier
    * will be generated as the name.
    */
-  constructor(_parent?: Context | string, name?: string) {
+  constructor(
+    _parent?: Context | BindingScope | string,
+    name?: string | BindingScope,
+  ) {
     super();
     // The number of listeners can grow with the number of child contexts
     // For example, each request can add a listener to the RestServer and the
@@ -134,7 +137,24 @@ export class Context extends EventEmitter {
       name = _parent;
       _parent = undefined;
     }
+    if (_parent instanceof BindingScope) {
+      this.scope = _parent;
+      _parent = undefined;
+    }
+    if (name instanceof BindingScope) {
+      this.scope = name;
+      name = this.scope.name;
+    }
     this._parent = _parent;
+    if (
+      this._parent &&
+      this.scope !== BindingScope.TRANSIENT &&
+      this._parent.getScopedContext(this.scope)
+    ) {
+      throw new Error(
+        `Context with scope ${this.scope.name} already exists in the parent context chain`,
+      );
+    }
     this.name = name ?? this.generateName();
     this.tagIndexer = new ContextTagIndexer(this);
     this.subscriptionManager = new ContextSubscriptionManager(this);
@@ -508,12 +528,7 @@ export class Context extends EventEmitter {
    * Get the context matching the scope
    * @param scope - Binding scope
    */
-  getScopedContext(
-    scope:
-      | BindingScope.APPLICATION
-      | BindingScope.SERVER
-      | BindingScope.REQUEST,
-  ): Context | undefined {
+  getScopedContext(scope: BindingScope): Context | undefined {
     if (this.scope === scope) return this;
     if (this._parent) {
       return this._parent.getScopedContext(scope);
@@ -540,11 +555,12 @@ export class Context extends EventEmitter {
         // Use the current context
         return this;
       case BindingScope.REQUEST:
+      default:
         resolutionCtx = this.getScopedContext(binding.scope);
         if (resolutionCtx != null) {
           return resolutionCtx;
-        } else {
-          // If no `REQUEST` scope exists in the chain, fall back to the current
+        } else if (binding.scope.optional) {
+          // If the scope does not exist in the chain and is optional, fall back to the current
           // context
           this.debug(
             'No context is found for binding "%s (scope=%s)". Fall back to the current context.',
@@ -553,9 +569,6 @@ export class Context extends EventEmitter {
           );
           return this;
         }
-      default:
-        // Use the scoped context
-        return this.getScopedContext(binding.scope);
     }
   }
 
